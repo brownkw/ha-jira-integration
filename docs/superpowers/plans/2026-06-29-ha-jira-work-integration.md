@@ -113,7 +113,8 @@ DEFAULT_DUE_WITHIN_DAYS = 3
 DEFAULT_CHECKPOINT_EVERY = 12  # 12 * 5min = hourly
 
 # Options keys (continued)
-OPT_HIGH_PRIORITY_NAMES = "high_priority_names"  # list[str] of priority names
+OPT_HIGH_PRIORITY_NAMES = "high_priority_names"    # list[str] of priority names
+OPT_ROLLING_WINDOW_HOURS = "rolling_window_hours"  # int, hours for new_last_window sensor
 
 # Defaults
 DEFAULT_HIGH_PRIORITY_NAMES = ["Blocker", "Critical"]
@@ -972,7 +973,7 @@ from .const import (
     DEFAULT_HIGH_PRIORITY_NAMES, DEFAULT_POLL_INTERVAL, DOMAIN,
     JQL_OPEN_ASSIGNED, OPT_CHECKPOINT_EVERY, OPT_CUSTOM_FIELDS,
     OPT_DUE_WITHIN_DAYS, OPT_HIGH_PRIORITY_NAMES, OPT_POLL_INTERVAL,
-    ROLLING_WINDOW_HOURS,
+    OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS,
 )
 from .newly_assigned import NewlyAssignedTracker
 
@@ -984,7 +985,8 @@ class JiraDataUpdateCoordinator(DataUpdateCoordinator):
         self._client = client
         self._entry = entry
         self._store = store
-        self._tracker = NewlyAssignedTracker(ROLLING_WINDOW_HOURS)
+        window = entry.options.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS)
+        self._tracker = NewlyAssignedTracker(window)
         self._poll_count = 0
         interval = entry.options.get(OPT_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         super().__init__(
@@ -1197,7 +1199,9 @@ class JiraNewLastWindowSensor(_Base):
 
     @property
     def extra_state_attributes(self):
-        return {"window_hours": 24}
+        from .const import OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS
+        window = self.coordinator._entry.options.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS)
+        return {"window_hours": window}
 
 
 async def async_setup_entry(
@@ -1306,7 +1310,7 @@ from .const import (
     CONF_EMAIL, CONF_TOKEN, CONF_URL, DEFAULT_DUE_WITHIN_DAYS,
     DEFAULT_HIGH_PRIORITY_NAMES, DEFAULT_POLL_INTERVAL, DOMAIN,
     OPT_CUSTOM_FIELDS, OPT_DUE_WITHIN_DAYS, OPT_HIGH_PRIORITY_NAMES,
-    OPT_POLL_INTERVAL,
+    OPT_POLL_INTERVAL, OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS,
 )
 
 USER_SCHEMA = vol.Schema({
@@ -1382,6 +1386,10 @@ class JiraWorkOptionsFlow(OptionsFlow):
                 OPT_DUE_WITHIN_DAYS,
                 default=current.get(OPT_DUE_WITHIN_DAYS, DEFAULT_DUE_WITHIN_DAYS),
             ): vol.All(int, vol.Range(min=0, max=365)),
+            vol.Optional(
+                OPT_ROLLING_WINDOW_HOURS,
+                default=current.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS),
+            ): vol.All(int, vol.Range(min=1, max=168)),
         })
         return self.async_show_form(step_id="init", data_schema=schema)
 ```
@@ -1533,6 +1541,7 @@ git commit -m "feat: integration entry setup/unload with persistence and reload"
         "data": {
           "custom_fields": "Custom fields to track",
           "high_priority_names": "High-priority levels (for the high-priority sensor)",
+          "rolling_window_hours": "Newly-assigned rolling window (hours)",
           "poll_interval": "Poll interval (minutes)",
           "due_within_days": "Due-soon window (days)"
         }

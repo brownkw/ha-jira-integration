@@ -89,6 +89,22 @@ Major → Minor → Trivial**. The hardcoded set would silently return 0 for the
 **Affected tasks:** 2 (const), 4 (aggregator), 7 (api — add `get_priorities`),
 9 (coordinator — pass names into aggregate), 11 (options flow — multi-select).
 
+### Rolling window duration: user-configurable, defaulting to 24h
+`ROLLING_WINDOW_HOURS = 24` was initially a hardcoded constant. Made
+user-configurable via the Options Flow for the same reason as high-priority
+names — a personal preference that has no universally correct value.
+
+**Implementation:**
+- `OPT_ROLLING_WINDOW_HOURS` added to `const.py`; `ROLLING_WINDOW_HOURS = 24`
+  remains as the default fallback.
+- Coordinator reads `entry.options.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS)`
+  when constructing `NewlyAssignedTracker` — so 24h is the default if never
+  configured.
+- Options Flow adds a field bounded `vol.Range(min=1, max=168)` (1h to 7 days).
+- `JiraNewLastWindowSensor.extra_state_attributes` reads the live value from
+  coordinator options rather than hardcoding `24` — stays in sync if user changes it.
+- `strings.json` adds `"rolling_window_hours"` label.
+
 ### "Newly assigned" mechanism: key set-diff, not JQL changelog
 Compare current open-assigned issue-key set vs. the previous poll's set;
 `new = current - previous`. Chosen over JQL changelog (`assignee changed to
