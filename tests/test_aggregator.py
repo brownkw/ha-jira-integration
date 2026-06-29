@@ -83,3 +83,35 @@ def test_due_today_is_within_window():
     r = aggregate(issues, custom_field_ids=[], due_within_days=3, now=_now())
     assert r["overdue"] == 0
     assert r["due_within_x"] == 1
+
+
+# ── Task 5: custom-field normalization & numeric summing ──────────────────────
+
+def test_custom_field_normalization():
+    issues = [
+        _issue("A-1", "A", "Bug", "To Do", "Low", fields={
+            "customfield_10020": 5,                                      # numeric
+            "customfield_10031": {"value": "Platform"},                  # option object
+            "customfield_10040": [{"value": "x"}, {"value": "y"}],      # array of options
+            "customfield_10050": None,                                   # null
+        }),
+        _issue("A-2", "A", "Bug", "To Do", "Low", fields={
+            "customfield_10020": 8,
+            "customfield_10031": {"value": "Mobile"},
+        }),
+    ]
+    r = aggregate(
+        issues,
+        custom_field_ids=["customfield_10020", "customfield_10031", "customfield_10040", "customfield_10050"],
+        due_within_days=3,
+        now=_now(),
+    )
+    cf = r["custom_fields"]
+    # numeric field gets a sum
+    assert cf["customfield_10020"]["sum"] == 13
+    # option object normalized to its value, per-issue
+    assert cf["customfield_10031"]["values"] == {"A-1": "Platform", "A-2": "Mobile"}
+    # array normalized to joined string
+    assert cf["customfield_10040"]["values"] == {"A-1": "x, y"}
+    # null/missing produces no per-issue entry
+    assert cf["customfield_10050"]["values"] == {}

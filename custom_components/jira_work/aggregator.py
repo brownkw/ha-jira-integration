@@ -10,6 +10,24 @@ def _bucket(items: Iterable[str]) -> dict[str, int]:
     return dict(Counter(items))
 
 
+def _normalize_value(value: Any) -> Any:
+    """Reduce a Jira custom-field value to a display-friendly form."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    if isinstance(value, dict):
+        for k in ("value", "name", "displayName"):
+            if k in value:
+                return value[k]
+        return str(value)
+    if isinstance(value, list):
+        parts = [_normalize_value(v) for v in value]
+        parts = [str(p) for p in parts if p is not None]
+        return ", ".join(parts) if parts else None
+    return str(value)
+
+
 def aggregate(
     issues: list[dict[str, Any]],
     custom_field_ids: list[str],
@@ -53,6 +71,25 @@ def aggregate(
         if prio and prio.get("name") in high_priority_names:
             high_priority_keys.append(key)
 
+    custom_fields: dict[str, dict[str, Any]] = {}
+    for fid in custom_field_ids:
+        values: dict[str, Any] = {}
+        numeric_total = 0.0
+        has_numeric = False
+        for issue in issues:
+            raw = issue.get("fields", {}).get(fid)
+            norm = _normalize_value(raw)
+            if norm is None:
+                continue
+            values[issue["key"]] = norm
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                numeric_total += raw
+                has_numeric = True
+        entry: dict[str, Any] = {"values": values}
+        if has_numeric:
+            entry["sum"] = numeric_total
+        custom_fields[fid] = entry
+
     return {
         "total": len(issues),
         "by_project": _bucket(projects),
@@ -65,4 +102,5 @@ def aggregate(
         "due_within_keys": due_within_keys,
         "high_priority": len(high_priority_keys),
         "high_priority_keys": high_priority_keys,
+        "custom_fields": custom_fields,
     }
