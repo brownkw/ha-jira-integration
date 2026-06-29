@@ -54,6 +54,48 @@ class JiraClient:
         if resp.status >= 400:
             raise JiraConnectionError(f"HTTP {resp.status}")
 
+    async def get_priorities(self) -> list[str]:
+        """Return priority names in server order."""
+        try:
+            async with self._session.get(
+                f"{self._url}/rest/api/3/priority", headers=self._headers()
+            ) as resp:
+                await self._raise_for_status(resp)
+                data = await resp.json()
+        except aiohttp.ClientError as err:
+            raise JiraConnectionError(str(err)) from err
+        return [p["name"] for p in data]
+
+    async def get_custom_fields(self) -> dict[str, str]:
+        """Return {customfield_id: display_label} for all custom fields.
+
+        Duplicate names are disambiguated by appending the field ID in parens.
+        Built-in (non-custom) fields are excluded.
+        """
+        try:
+            async with self._session.get(
+                f"{self._url}/rest/api/3/field", headers=self._headers()
+            ) as resp:
+                await self._raise_for_status(resp)
+                data = await resp.json()
+        except aiohttp.ClientError as err:
+            raise JiraConnectionError(str(err)) from err
+
+        # Only custom fields
+        custom = [f for f in data if f.get("custom")]
+
+        # Count name occurrences to detect duplicates
+        from collections import Counter
+        name_count = Counter(f["name"] for f in custom)
+
+        result: dict[str, str] = {}
+        for field in custom:
+            fid = field["id"]
+            name = field["name"]
+            label = f"{name} ({fid})" if name_count[name] > 1 else name
+            result[fid] = label
+        return result
+
     async def search(
         self, jql: str, fields: list[str], page_size: int = 100
     ) -> list[dict[str, Any]]:

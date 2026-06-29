@@ -53,3 +53,39 @@ async def test_search_429_raises_rate_limit():
             with pytest.raises(JiraRateLimitError) as exc:
                 await c.search("jql", ["summary"])
             assert exc.value.retry_after == 30
+
+
+# ── Task 7: field lookup ──────────────────────────────────────────────────────
+
+async def test_get_priorities():
+    priorities = [
+        {"id": "1", "name": "Blocker"},
+        {"id": "2", "name": "Critical"},
+        {"id": "3", "name": "Major"},
+        {"id": "4", "name": "Minor"},
+        {"id": "5", "name": "Trivial"},
+    ]
+    with aioresponses() as m:
+        m.get(f"{BASE}/rest/api/3/priority", payload=priorities)
+        async with aiohttp.ClientSession() as s:
+            c = _client(s)
+            result = await c.get_priorities()
+    assert result == ["Blocker", "Critical", "Major", "Minor", "Trivial"]
+
+
+async def test_get_custom_fields_deduplicates_names():
+    fields = [
+        {"id": "customfield_10020", "name": "Story Points", "custom": True},
+        {"id": "customfield_10031", "name": "Team", "custom": True},
+        {"id": "customfield_10099", "name": "Team", "custom": True},   # duplicate name
+        {"id": "summary", "name": "Summary", "custom": False},         # built-in, excluded
+    ]
+    with aioresponses() as m:
+        m.get(f"{BASE}/rest/api/3/field", payload=fields)
+        async with aiohttp.ClientSession() as s:
+            c = _client(s)
+            result = await c.get_custom_fields()
+    assert result["customfield_10020"] == "Story Points"
+    assert result["customfield_10031"] == "Team (customfield_10031)"
+    assert result["customfield_10099"] == "Team (customfield_10099)"
+    assert "summary" not in result
