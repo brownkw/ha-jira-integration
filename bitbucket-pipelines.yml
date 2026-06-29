@@ -1,0 +1,12 @@
+image: alpine/git:latest
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Mirror to GitHub
+          clone:
+            depth: full
+          script:
+            - git remote add github git@github.com:brownkw/ha-jira-integration.git
+            - git push --mirror github
