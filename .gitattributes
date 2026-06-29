@@ -1,0 +1,20 @@
+# Files and directories to exclude from git archive exports
+# (e.g. GitHub/Bitbucket zip downloads, HACS distribution)
+
+# Planning and design docs — internal use only
+docs/                   export-ignore
+
+# Session and project memory — internal use only
+.memory/                export-ignore
+
+# Development tools
+.python-version         export-ignore
+pytest.ini              export-ignore
+requirements_test.txt   export-ignore
+bitbucket-pipelines.yml export-ignore
+
+# Tests — not needed by end users
+tests/                  export-ignore
+
+# Dev tools
+smoke_test.py           export-ignore
