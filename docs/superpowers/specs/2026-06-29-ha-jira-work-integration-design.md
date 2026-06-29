@@ -30,7 +30,9 @@ integration today (only middleware glue via tools like n8n / Pipedream).
   attributes; individual buckets are promoted to dedicated sensors only by a
   deliberate code change.
 - No "fetch all custom fields" firehose; tracked fields are explicitly selected.
-- Not packaged for HACS/sharing yet (can follow later).
+- No OAuth and no submission to the HACS **default** store (Tier 2) yet. The
+  repo is, however, structured to be **HACS-installable via a GitHub URL**
+  (Tier 1 "custom repository") from day one — see Packaging / Distribution.
 
 ## Approach Decision
 
@@ -241,6 +243,35 @@ responses; frozen time for date math).
 - Options flow: field selection persists IDs; save reloads entry.
 - Coordinator: mocked client populates `coordinator.data`; sensors read correct
   values; exception → `UpdateFailed` (unavailable, no crash).
+
+## Packaging / Distribution
+
+Goal: keep the simple **token-based** approach, but structure the repo so it can
+be **installed via a GitHub URL** as a HACS custom repository if/when sharing is
+desired. This is all additive repo hygiene — no code changes vs. the personal
+build.
+
+**Tier 1 — HACS-installable via GitHub URL (target now):**
+- Repo layout: integration at `custom_components/jira_work/` at the repo root
+  (already the planned layout).
+- Complete, valid `manifest.json`: `domain`, `name`, `version`,
+  `documentation` URL, `issue_tracker` URL, `codeowners`, `requirements`
+  (pinned deps), `iot_class: cloud_polling`, `config_flow: true`.
+- `hacs.json` at repo root (HACS metadata: `name`, optional min HA version).
+- Real `README.md` (install steps, config, screenshots), `LICENSE` (MIT),
+  `.gitignore`.
+- Versioned git tags / GitHub releases (HACS installs by tag, e.g. `v0.1.0`).
+
+Result: a user adds the GitHub URL as a HACS "custom repository" and installs.
+
+**Tier 2 — HACS default store (deferred, optional):**
+- Submit repo to the HACS `default` list (must pass `hacs/action` validation).
+- Add a `home-assistant/brands` entry/logo for the domain.
+- UI translations (`strings.json`), `hassfest` validation, broader test
+  coverage, and ongoing maintenance across HA releases.
+- Public distribution best practice would favor **OAuth** over a long-lived
+  token at this point (added as a second auth method; the client/aggregator are
+  auth-agnostic).
 
 ## Open Items / Future
 
