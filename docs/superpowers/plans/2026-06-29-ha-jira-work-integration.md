@@ -51,6 +51,7 @@ touch custom_components/jira_work/__init__.py tests/__init__.py
 ```
 pytest==8.2.0
 pytest-asyncio==0.23.7
+pytest-homeassistant-custom-component==0.13.316
 freezegun==1.5.1
 aioresponses==0.7.6
 ```
@@ -928,23 +929,17 @@ async def test_poll_error_raises_updatefailed(hass):
         await coord._async_update_data()
 ```
 
-- [ ] **Step 2: Add the `hass` fixture to `tests/conftest.py`**
+- [ ] **Step 2: Add `tests/conftest.py`**
 
 Create `tests/conftest.py`:
 ```python
 import sys
 sys.path.insert(0, ".")
-import pytest
-from homeassistant.core import HomeAssistant
-
-@pytest.fixture
-async def hass(event_loop):
-    hass = HomeAssistant("/tmp/ha-test-config")
-    await hass.async_start()
-    yield hass
-    await hass.async_stop()
 ```
-Add `homeassistant==2024.6.0` to `requirements_test.txt` and run `.venv/bin/pip install -r requirements_test.txt`.
+
+The `hass` fixture is provided automatically by `pytest-homeassistant-custom-component` — no need to define it manually. The `sys.path.insert` ensures local imports resolve correctly.
+
+Run `.venv/bin/pip install -r requirements_test.txt` to confirm deps are installed (already done in Task 1, but re-confirm here since this is the first test that uses `hass`).
 
 - [ ] **Step 3: Run to verify failure**
 
@@ -1504,12 +1499,13 @@ git commit -m "feat: integration entry setup/unload with persistence and reload"
   "name": "Jira Work",
   "version": "0.1.0",
   "config_flow": true,
-  "documentation": "https://github.com/wbrown/ha-jira-work",
-  "issue_tracker": "https://github.com/wbrown/ha-jira-work/issues",
-  "codeowners": ["@wbrown"],
+  "documentation": "https://github.com/brownkw/ha-jira-integration",
+  "issue_tracker": "https://github.com/brownkw/ha-jira-integration/issues",
+  "codeowners": ["@brownkw"],
   "requirements": [],
   "iot_class": "cloud_polling",
-  "integration_type": "service"
+  "integration_type": "service",
+  "homeassistant": "2026.2.3"
 }
 ```
 
@@ -1557,7 +1553,7 @@ git commit -m "feat: integration entry setup/unload with persistence and reload"
 {
   "name": "Jira Work",
   "render_readme": true,
-  "homeassistant": "2024.6.0"
+  "homeassistant": "2026.2.3"
 }
 ```
 
@@ -1573,7 +1569,7 @@ for overdue, due-soon, high-priority, and newly-assigned items.
 ## Install (HACS custom repository)
 
 1. HACS → Integrations → ⋮ → Custom repositories.
-2. Add `https://github.com/wbrown/ha-jira-work`, category "Integration".
+2. Add `https://github.com/brownkw/ha-jira-integration`, category "Integration".
 3. Install "Jira Work", restart Home Assistant.
 4. Settings → Devices & Services → Add Integration → "Jira Work".
 
