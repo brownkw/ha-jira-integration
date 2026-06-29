@@ -8,5 +8,5 @@ pipelines:
           clone:
             depth: full
           script:
-            - git remote add github git@github.com:brownkw/ha-jira-integration.git
+            - git remote add github https://${GITHUB_TOKEN}@github.com/brownkw/ha-jira-integration.git
             - git push --mirror github
