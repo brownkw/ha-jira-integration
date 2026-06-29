@@ -31,10 +31,38 @@ def aggregate(
         prio = f.get("priority")
         priorities.append(prio.get("name") if prio else "Unprioritized")
 
+    if now is None:
+        now = datetime.now(timezone.utc)
+    today = now.date()
+
+    overdue_keys: list[str] = []
+    due_within_keys: list[str] = []
+    high_priority_keys: list[str] = []
+
+    for issue in issues:
+        f = issue.get("fields", {})
+        key = issue.get("key")
+        due = f.get("duedate")
+        if due:
+            due_date = datetime.fromisoformat(due).date()
+            if due_date < today:
+                overdue_keys.append(key)
+            elif 0 <= (due_date - today).days <= due_within_days:
+                due_within_keys.append(key)
+        prio = f.get("priority")
+        if prio and prio.get("name") in high_priority_names:
+            high_priority_keys.append(key)
+
     return {
         "total": len(issues),
         "by_project": _bucket(projects),
         "by_type": _bucket(types),
         "by_status": _bucket(statuses),
         "by_priority": _bucket(priorities),
+        "overdue": len(overdue_keys),
+        "overdue_keys": overdue_keys,
+        "due_within_x": len(due_within_keys),
+        "due_within_keys": due_within_keys,
+        "high_priority": len(high_priority_keys),
+        "high_priority_keys": high_priority_keys,
     }
