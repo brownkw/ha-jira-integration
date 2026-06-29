@@ -1,0 +1,13 @@
+{
+  "domain": "jira_work",
+  "name": "Jira Work",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/brownkw/ha-jira-integration",
+  "issue_tracker": "https://github.com/brownkw/ha-jira-integration/issues",
+  "codeowners": ["@brownkw"],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "integration_type": "service",
+  "homeassistant": "2026.2.3"
+}
