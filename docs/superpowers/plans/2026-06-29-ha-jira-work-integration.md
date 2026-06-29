@@ -308,7 +308,7 @@ def aggregate(
     issues: list[dict[str, Any]],
     custom_field_ids: list[str],
     due_within_days: int,
-    high_priority_names: set[str],
+    high_priority_names: set[str] = frozenset(),
     now: datetime | None = None,
 ) -> dict[str, Any]:
 ```
@@ -1001,7 +1001,7 @@ class JiraDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_load_state(self) -> None:
         blob = await self._store.async_load()
         if blob:
-            self._tracker = NewlyAssignedTracker.deserialize(blob, ROLLING_WINDOW_HOURS)
+            self._tracker = NewlyAssignedTracker.deserialize(blob, self._entry.options.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS))
 
     async def async_save_state(self) -> None:
         await self._store.async_save(self._tracker.serialize())
