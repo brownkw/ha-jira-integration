@@ -1,0 +1,5 @@
+pytest==9.0.0
+pytest-asyncio==1.3.0
+pytest-homeassistant-custom-component==0.13.316
+freezegun==1.5.2
+aioresponses==0.7.6

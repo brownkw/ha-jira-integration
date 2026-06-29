@@ -49,10 +49,10 @@ touch custom_components/jira_work/__init__.py tests/__init__.py
 - [ ] **Step 2: Write `requirements_test.txt`**
 
 ```
-pytest==8.2.0
-pytest-asyncio==0.23.7
+pytest==9.0.0
+pytest-asyncio==1.3.0
 pytest-homeassistant-custom-component==0.13.316
-freezegun==1.5.1
+freezegun==1.5.2
 aioresponses==0.7.6
 ```
 
