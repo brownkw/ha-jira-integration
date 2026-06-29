@@ -64,6 +64,31 @@ Newly-assigned ships as TWO sensors because they answer different questions:
 Each alertable sensor carries a `keys` attribute (the actual issue keys) so
 automations can reference *which* items, not just a count.
 
+### High-priority names: user-configurable via Options Flow, not hardcoded
+The original design hardcoded `HIGH_PRIORITY_NAMES = {"Highest", "High"}` in
+`const.py`. This was discovered to be **broken** for the target CLDSOLACC
+instance, which uses a non-standard priority scheme: **Blocker → Critical →
+Major → Minor → Trivial**. The hardcoded set would silently return 0 for the
+`high_priority` sensor on every poll.
+
+**Decision:** make high-priority names user-configurable via the Options Flow.
+
+**Implementation:**
+- `GET /rest/api/3/priority` is fetched at setup time alongside `/field`
+  (cheap, no pagination, ~10 lines in `api.py`).
+- The full priority list is presented as a multi-select in the Options Flow.
+- Selected names stored as `OPT_HIGH_PRIORITY_NAMES` (list[str]) in options.
+- Default: `["Blocker", "Critical"]` — correct for the CLDSOLACC instance and
+  semantically appropriate ("things on fire") for most instances.
+- `aggregator.aggregate()` accepts `high_priority_names: set[str]` as a
+  parameter instead of importing a hardcoded constant — keeps the pure layer
+  HA-free and testable with any priority scheme.
+- `const.py` retains `DEFAULT_HIGH_PRIORITY_NAMES = ["Blocker", "Critical"]`
+  as the fallback when options haven't been configured yet.
+
+**Affected tasks:** 2 (const), 4 (aggregator), 7 (api — add `get_priorities`),
+9 (coordinator — pass names into aggregate), 11 (options flow — multi-select).
+
 ### "Newly assigned" mechanism: key set-diff, not JQL changelog
 Compare current open-assigned issue-key set vs. the previous poll's set;
 `new = current - previous`. Chosen over JQL changelog (`assignee changed to

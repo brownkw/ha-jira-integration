@@ -112,8 +112,11 @@ DEFAULT_POLL_INTERVAL = 5
 DEFAULT_DUE_WITHIN_DAYS = 3
 DEFAULT_CHECKPOINT_EVERY = 12  # 12 * 5min = hourly
 
-# High-priority names treated as "urgent"
-HIGH_PRIORITY_NAMES = {"Highest", "High"}
+# Options keys (continued)
+OPT_HIGH_PRIORITY_NAMES = "high_priority_names"  # list[str] of priority names
+
+# Defaults
+DEFAULT_HIGH_PRIORITY_NAMES = ["Blocker", "Critical"]
 
 # Core Jira fields always requested
 CORE_FIELDS = ["summary", "status", "issuetype", "priority", "duedate", "project", "updated"]
@@ -131,8 +134,8 @@ ROLLING_WINDOW_HOURS = 24
 
 - [ ] **Step 2: Verify it imports**
 
-Run: `.venv/bin/python -c "import sys; sys.path.insert(0,'.'); from custom_components.jira_work import const; print(const.DOMAIN)"`
-Expected: prints `jira_work`
+Run: `.venv/bin/python -c "import sys; sys.path.insert(0,'.'); from custom_components.jira_work import const; print(const.DOMAIN, const.DEFAULT_HIGH_PRIORITY_NAMES)"`
+Expected: prints `jira_work ['Blocker', 'Critical']`
 
 - [ ] **Step 3: Commit**
 
@@ -274,7 +277,7 @@ def test_overdue_and_due_within():
         _issue("A-3", "A", "Bug", "To Do", "Low", duedate="2026-07-15"),  # far future
         _issue("A-4", "A", "Bug", "To Do", "Low", duedate=None),          # no due date
     ]
-    r = aggregate(issues, custom_field_ids=[], due_within_days=3, now=_now())
+    r = aggregate(issues, custom_field_ids=[], due_within_days=3, high_priority_names=set(), now=_now())
     assert r["overdue"] == 1
     assert sorted(r["overdue_keys"]) == ["A-1"]
     assert r["due_within_x"] == 1
@@ -282,11 +285,11 @@ def test_overdue_and_due_within():
 
 def test_high_priority_count():
     issues = [
-        _issue("A-1", "A", "Bug", "To Do", "Highest"),
-        _issue("A-2", "A", "Bug", "To Do", "High"),
-        _issue("A-3", "A", "Bug", "To Do", "Medium"),
+        _issue("A-1", "A", "Bug", "To Do", "Blocker"),
+        _issue("A-2", "A", "Bug", "To Do", "Critical"),
+        _issue("A-3", "A", "Bug", "To Do", "Major"),
     ]
-    r = aggregate(issues, custom_field_ids=[], due_within_days=3, now=_now())
+    r = aggregate(issues, custom_field_ids=[], due_within_days=3, high_priority_names={"Blocker", "Critical"}, now=_now())
     assert r["high_priority"] == 2
     assert sorted(r["high_priority_keys"]) == ["A-1", "A-2"]
 ```
@@ -298,9 +301,15 @@ Expected: FAIL with KeyError on `overdue` / `high_priority`.
 
 - [ ] **Step 3: Extend the aggregator**
 
-Add imports and helpers at the top of `aggregator.py` (after existing imports):
+Update the `aggregate` function signature to accept `high_priority_names`:
 ```python
-from .const import HIGH_PRIORITY_NAMES
+def aggregate(
+    issues: list[dict[str, Any]],
+    custom_field_ids: list[str],
+    due_within_days: int,
+    high_priority_names: set[str],
+    now: datetime | None = None,
+) -> dict[str, Any]:
 ```
 Inside `aggregate`, before the `return`, add:
 ```python
@@ -323,7 +332,7 @@ Inside `aggregate`, before the `return`, add:
             elif 0 <= (due_date - today).days <= due_within_days:
                 due_within_keys.append(key)
         prio = f.get("priority")
-        if prio and prio.get("name") in HIGH_PRIORITY_NAMES:
+        if prio and prio.get("name") in high_priority_names:
             high_priority_keys.append(key)
 ```
 Then add these to the returned dict:
@@ -622,6 +631,21 @@ git commit -m "feat: JiraClient auth, paginated search, error mapping"
 
 Append to `tests/test_api.py`:
 ```python
+async def test_get_priorities():
+    priorities = [
+        {"id": "1", "name": "Blocker"},
+        {"id": "2", "name": "Critical"},
+        {"id": "3", "name": "Major"},
+        {"id": "4", "name": "Minor"},
+        {"id": "5", "name": "Trivial"},
+    ]
+    with aioresponses() as m:
+        m.get(f"{BASE}/rest/api/3/priority", payload=priorities)
+        async with aiohttp.ClientSession() as s:
+            c = _client(s)
+            result = await c.get_priorities()
+    assert result == ["Blocker", "Critical", "Major", "Minor", "Trivial"]
+
 async def test_get_custom_fields_friendly_names():
     fields = [
         {"id": "summary", "name": "Summary", "custom": False},
@@ -660,9 +684,24 @@ async def test_get_custom_fields_disambiguates_duplicates():
 Run: `.venv/bin/pytest tests/test_api.py -k custom_fields -v`
 Expected: FAIL — no `get_custom_fields` method.
 
-- [ ] **Step 3: Add `get_custom_fields` to `JiraClient`**
+- [ ] **Step 3: Add `get_priorities` and `get_custom_fields` to `JiraClient`**
 
-Add this method to the `JiraClient` class:
+Add `get_priorities` method to the `JiraClient` class:
+```python
+    async def get_priorities(self) -> list[str]:
+        """Return priority names in server order."""
+        try:
+            async with self._session.get(
+                f"{self._url}/rest/api/3/priority", headers=self._headers()
+            ) as resp:
+                await self._raise_for_status(resp)
+                data = await resp.json()
+        except aiohttp.ClientError as err:
+            raise JiraConnectionError(str(err)) from err
+        return [p["name"] for p in data]
+```
+
+Add `get_custom_fields` method to the `JiraClient` class:
 ```python
     async def get_custom_fields(self) -> dict[str, str]:
         """Return {customfield_id: friendly_label}, disambiguating duplicate names."""
@@ -930,8 +969,9 @@ from .aggregator import aggregate
 from .api import JiraClient, JiraError
 from .const import (
     CORE_FIELDS, DEFAULT_CHECKPOINT_EVERY, DEFAULT_DUE_WITHIN_DAYS,
-    DEFAULT_POLL_INTERVAL, DOMAIN, JQL_OPEN_ASSIGNED, OPT_CHECKPOINT_EVERY,
-    OPT_CUSTOM_FIELDS, OPT_DUE_WITHIN_DAYS, OPT_POLL_INTERVAL,
+    DEFAULT_HIGH_PRIORITY_NAMES, DEFAULT_POLL_INTERVAL, DOMAIN,
+    JQL_OPEN_ASSIGNED, OPT_CHECKPOINT_EVERY, OPT_CUSTOM_FIELDS,
+    OPT_DUE_WITHIN_DAYS, OPT_HIGH_PRIORITY_NAMES, OPT_POLL_INTERVAL,
     ROLLING_WINDOW_HOURS,
 )
 from .newly_assigned import NewlyAssignedTracker
@@ -973,7 +1013,8 @@ class JiraDataUpdateCoordinator(DataUpdateCoordinator):
 
         now = datetime.now(timezone.utc)
         due_within = self._entry.options.get(OPT_DUE_WITHIN_DAYS, DEFAULT_DUE_WITHIN_DAYS)
-        result = aggregate(issues, self.custom_field_ids, due_within, now=now)
+        high_priority_names = set(self._entry.options.get(OPT_HIGH_PRIORITY_NAMES, DEFAULT_HIGH_PRIORITY_NAMES))
+        result = aggregate(issues, self.custom_field_ids, due_within, high_priority_names, now=now)
 
         current_keys = {i["key"] for i in issues}
         result.update(self._tracker.update(current_keys, now=now))
@@ -1211,8 +1252,8 @@ USER_INPUT = {
 
 async def test_user_flow_success(hass):
     with patch(
-        "custom_components.jira_work.config_flow.JiraClient.get_custom_fields",
-        new=AsyncMock(return_value={"customfield_10020": "Story Points"}),
+        "custom_components.jira_work.config_flow._validate",
+        new=AsyncMock(return_value=({"customfield_10020": "Story Points"}, ["Blocker", "Critical", "Major", "Minor", "Trivial"])),
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}
@@ -1227,7 +1268,7 @@ async def test_user_flow_success(hass):
 async def test_user_flow_bad_auth(hass):
     from custom_components.jira_work.api import JiraAuthError
     with patch(
-        "custom_components.jira_work.config_flow.JiraClient.get_custom_fields",
+        "custom_components.jira_work.config_flow._validate",
         new=AsyncMock(side_effect=JiraAuthError("nope")),
     ):
         result = await hass.config_entries.flow.async_init(
@@ -1263,7 +1304,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import JiraAuthError, JiraClient, JiraConnectionError, JiraError
 from .const import (
     CONF_EMAIL, CONF_TOKEN, CONF_URL, DEFAULT_DUE_WITHIN_DAYS,
-    DEFAULT_POLL_INTERVAL, DOMAIN, OPT_CUSTOM_FIELDS, OPT_DUE_WITHIN_DAYS,
+    DEFAULT_HIGH_PRIORITY_NAMES, DEFAULT_POLL_INTERVAL, DOMAIN,
+    OPT_CUSTOM_FIELDS, OPT_DUE_WITHIN_DAYS, OPT_HIGH_PRIORITY_NAMES,
     OPT_POLL_INTERVAL,
 )
 
@@ -1274,11 +1316,13 @@ USER_SCHEMA = vol.Schema({
 })
 
 
-async def _validate(hass, data: dict[str, Any]) -> dict[str, str]:
-    """Return id->label custom-field map, or raise."""
+async def _validate(hass, data: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
+    """Return (custom_fields map, priority names list), or raise."""
     session = async_get_clientsession(hass)
     client = JiraClient(data[CONF_URL], data[CONF_EMAIL], data[CONF_TOKEN], session)
-    return await client.get_custom_fields()
+    custom_fields = await client.get_custom_fields()
+    priorities = await client.get_priorities()
+    return custom_fields, priorities
 
 
 class JiraWorkConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -1316,16 +1360,20 @@ class JiraWorkOptionsFlow(OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         try:
-            fields = await _validate(self.hass, dict(self._entry.data))
+            custom_fields, priorities = await _validate(self.hass, dict(self._entry.data))
         except JiraError:
-            fields = {}
+            custom_fields, priorities = {}, list(DEFAULT_HIGH_PRIORITY_NAMES)
 
         current = self._entry.options
         schema = vol.Schema({
             vol.Optional(
                 OPT_CUSTOM_FIELDS,
                 default=current.get(OPT_CUSTOM_FIELDS, []),
-            ): vol.All([vol.In(fields)], ),
+            ): vol.All([vol.In(custom_fields)]),
+            vol.Optional(
+                OPT_HIGH_PRIORITY_NAMES,
+                default=current.get(OPT_HIGH_PRIORITY_NAMES, DEFAULT_HIGH_PRIORITY_NAMES),
+            ): vol.All([vol.In(priorities)]),
             vol.Optional(
                 OPT_POLL_INTERVAL,
                 default=current.get(OPT_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
@@ -1338,7 +1386,10 @@ class JiraWorkOptionsFlow(OptionsFlow):
         return self.async_show_form(step_id="init", data_schema=schema)
 ```
 
-Note: `vol.In(fields)` accepts a dict and uses its keys (the customfield IDs) as valid values; HA renders the dict's values as labels. This gives the friendly-name dropdown storing IDs.
+Notes:
+- `vol.In(custom_fields)` accepts a dict and uses its keys (customfield IDs) as valid values; HA renders the dict's values as labels — friendly-name dropdown, stores IDs.
+- `vol.In(priorities)` is a list, so HA renders a multi-select of priority name strings.
+- If `_validate` fails (e.g. Jira unreachable when options open), falls back to the default priority list so the form still renders.
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -1481,6 +1532,7 @@ git commit -m "feat: integration entry setup/unload with persistence and reload"
       "init": {
         "data": {
           "custom_fields": "Custom fields to track",
+          "high_priority_names": "High-priority levels (for the high-priority sensor)",
           "poll_interval": "Poll interval (minutes)",
           "due_within_days": "Due-soon window (days)"
         }
@@ -1587,6 +1639,8 @@ Expected: tag created; clean commit history.
 - Auth (API token, Basic) → Task 6, Task 11.
 - Single paginated JQL query, explicit fields → Task 6, Task 9.
 - `/field` resolution, cached off hot path, duplicate-name disambiguation → Task 7, used in Task 11 (setup + options only).
+- `/priority` resolution, fetched at setup alongside `/field` → Task 7, Task 11.
+- High-priority names user-configurable via Options Flow, defaulting to `["Blocker", "Critical"]` → Tasks 2, 4, 7, 9, 11.
 - Pivots (project/type/status/priority) → Task 3.
 - Alertable counts (overdue/due-within/high-priority) → Task 4.
 - Custom-field normalization + numeric summing → Task 5.
