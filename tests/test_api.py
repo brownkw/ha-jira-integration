@@ -36,13 +36,13 @@ async def test_auth_header_is_basic():
 
 
 async def test_search_paginates():
-    page1 = {"startAt": 0, "maxResults": 2, "total": 3,
+    # New endpoint uses nextPageToken pagination (CHANGE-2046)
+    page1 = {"nextPageToken": "tok-page2",
               "issues": [{"key": "A-1", "fields": {}}, {"key": "A-2", "fields": {}}]}
-    page2 = {"startAt": 2, "maxResults": 2, "total": 3,
-              "issues": [{"key": "A-3", "fields": {}}]}
+    page2 = {"issues": [{"key": "A-3", "fields": {}}]}  # no nextPageToken = last page
     with aioresponses() as m:
-        m.post(f"{BASE}/rest/api/3/search", payload=page1)
-        m.post(f"{BASE}/rest/api/3/search", payload=page2)
+        m.post(f"{BASE}/rest/api/3/search/jql", payload=page1)
+        m.post(f"{BASE}/rest/api/3/search/jql", payload=page2)
         async with aiohttp.ClientSession() as s:
             c = _client(s)
             issues = await c.search("jql", ["summary"])
@@ -51,7 +51,7 @@ async def test_search_paginates():
 
 async def test_search_401_raises_auth_error():
     with aioresponses() as m:
-        m.post(f"{BASE}/rest/api/3/search", status=401)
+        m.post(f"{BASE}/rest/api/3/search/jql", status=401)
         async with aiohttp.ClientSession() as s:
             c = _client(s)
             with pytest.raises(JiraAuthError):
@@ -60,7 +60,7 @@ async def test_search_401_raises_auth_error():
 
 async def test_search_429_raises_rate_limit():
     with aioresponses() as m:
-        m.post(f"{BASE}/rest/api/3/search", status=429, headers={"Retry-After": "30"})
+        m.post(f"{BASE}/rest/api/3/search/jql", status=429, headers={"Retry-After": "30"})
         async with aiohttp.ClientSession() as s:
             c = _client(s)
             with pytest.raises(JiraRateLimitError) as exc:
@@ -103,10 +103,9 @@ async def test_scoped_client_without_cloud_id_falls_back_to_instance_url():
 
 async def test_scoped_client_search_uses_gateway_url():
     """After cloud_id is known, search() POSTs to the gateway URL, not the instance URL."""
-    page = {"startAt": 0, "maxResults": 50, "total": 1,
-            "issues": [{"key": "A-1", "fields": {}}]}
+    page = {"issues": [{"key": "A-1", "fields": {}}]}
     with aioresponses() as m:
-        m.post(f"{SCOPED_BASE}/rest/api/3/search", payload=page)
+        m.post(f"{SCOPED_BASE}/rest/api/3/search/jql", payload=page)
         async with aiohttp.ClientSession() as s:
             c = _scoped_client(s, cloud_id=CLOUD_ID)
             issues = await c.search("jql", ["summary"])
@@ -115,10 +114,9 @@ async def test_scoped_client_search_uses_gateway_url():
 
 async def test_classic_client_search_uses_instance_url():
     """Classic client continues to use the instance URL unchanged."""
-    page = {"startAt": 0, "maxResults": 50, "total": 1,
-            "issues": [{"key": "B-1", "fields": {}}]}
+    page = {"issues": [{"key": "B-1", "fields": {}}]}
     with aioresponses() as m:
-        m.post(f"{BASE}/rest/api/3/search", payload=page)
+        m.post(f"{BASE}/rest/api/3/search/jql", payload=page)
         async with aiohttp.ClientSession() as s:
             c = _client(s)
             issues = await c.search("jql", ["summary"])

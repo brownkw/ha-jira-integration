@@ -116,19 +116,25 @@ class JiraClient:
     async def search(
         self, jql: str, fields: list[str], page_size: int = 100
     ) -> list[dict[str, Any]]:
-        """Run a JQL search, following pagination."""
+        """Run a JQL search using the current /rest/api/3/search/jql endpoint.
+
+        The legacy /rest/api/3/search endpoint was removed in August 2025
+        (CHANGE-2046). The new endpoint uses nextPageToken-based pagination
+        instead of startAt/total.
+        """
         issues: list[dict[str, Any]] = []
-        start_at = 0
+        next_page_token: str | None = None
         while True:
-            body = {
+            body: dict[str, Any] = {
                 "jql": jql,
                 "fields": fields,
-                "startAt": start_at,
                 "maxResults": page_size,
             }
+            if next_page_token:
+                body["nextPageToken"] = next_page_token
             try:
                 async with self._session.post(
-                    f"{self._base_url}/rest/api/3/search",
+                    f"{self._base_url}/rest/api/3/search/jql",
                     headers=self._headers(),
                     json=body,
                 ) as resp:
@@ -138,8 +144,7 @@ class JiraClient:
                 raise JiraConnectionError(str(err)) from err
             batch = data.get("issues", [])
             issues.extend(batch)
-            total = data.get("total", len(issues))
-            start_at += len(batch)
-            if not batch or start_at >= total:
+            next_page_token = data.get("nextPageToken")
+            if not batch or not next_page_token:
                 break
         return issues
