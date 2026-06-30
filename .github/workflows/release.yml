@@ -18,9 +18,9 @@ jobs:
 
       - name: Create integration zip
         run: |
-          cd custom_components
-          zip -r ../jira_work.zip jira_work/
-          cd ..
+          cd custom_components/jira_work
+          zip -r ../../jira_work.zip .
+          cd ../..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
