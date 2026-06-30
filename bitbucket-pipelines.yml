@@ -1,12 +1,19 @@
 image: alpine/git:latest
 
+definitions:
+  steps:
+    - step: &mirror-step
+        name: Mirror to GitHub
+        clone:
+          depth: full
+        script:
+          - git remote add github https://${GITHUB_TOKEN}@github.com/brownkw/ha-jira-integration.git
+          - git push --mirror github
+
 pipelines:
   branches:
     main:
-      - step:
-          name: Mirror to GitHub
-          clone:
-            depth: full
-          script:
-            - git remote add github https://${GITHUB_TOKEN}@github.com/brownkw/ha-jira-integration.git
-            - git push --mirror github
+      - step: *mirror-step
+  tags:
+    'v*':
+      - step: *mirror-step
