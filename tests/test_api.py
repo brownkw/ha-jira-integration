@@ -7,12 +7,25 @@ from aioresponses import aioresponses
 from custom_components.jira_work.api import (
     JiraClient, JiraAuthError, JiraConnectionError, JiraRateLimitError,
 )
+from custom_components.jira_work.const import (
+    SCOPED_API_BASE, TOKEN_TYPE_CLASSIC, TOKEN_TYPE_SCOPED,
+)
 
 BASE = "https://example.atlassian.net"
+CLOUD_ID = "test-cloud-id-abc"
+SCOPED_BASE = f"{SCOPED_API_BASE}/{CLOUD_ID}"
 
 
 def _client(session):
     return JiraClient(BASE, "me@example.com", "tok123", session)
+
+
+def _scoped_client(session, cloud_id=None):
+    return JiraClient(
+        BASE, "me@example.com", "tok123", session,
+        token_type=TOKEN_TYPE_SCOPED,
+        cloud_id=cloud_id,
+    )
 
 
 async def test_auth_header_is_basic():
@@ -71,6 +84,67 @@ async def test_get_priorities():
             c = _client(s)
             result = await c.get_priorities()
     assert result == ["Blocker", "Critical", "Major", "Minor", "Trivial"]
+
+
+async def test_scoped_client_uses_gateway_url_when_cloud_id_known():
+    """When cloud_id is passed at construction, _base_url uses the gateway immediately."""
+    async with aiohttp.ClientSession() as s:
+        c = _scoped_client(s, cloud_id=CLOUD_ID)
+        assert c._base_url == SCOPED_BASE
+        assert c._instance_url == BASE
+
+
+async def test_scoped_client_without_cloud_id_falls_back_to_instance_url():
+    """Without a cloud_id, scoped client starts at instance URL until resolve_cloud_id() is called."""
+    async with aiohttp.ClientSession() as s:
+        c = _scoped_client(s, cloud_id=None)
+        assert c._base_url == BASE
+
+
+async def test_resolve_cloud_id_sets_base_url():
+    """resolve_cloud_id() fetches tenant_info and updates _base_url to the gateway URL."""
+    tenant_info = {"cloudId": CLOUD_ID, "displayName": "Test Site"}
+    with aioresponses() as m:
+        m.get(f"{BASE}/_edge/tenant_info", payload=tenant_info)
+        async with aiohttp.ClientSession() as s:
+            c = _scoped_client(s, cloud_id=None)
+            returned_id = await c.resolve_cloud_id()
+    assert returned_id == CLOUD_ID
+    assert c._base_url == SCOPED_BASE
+
+
+async def test_resolve_cloud_id_raises_on_http_error():
+    """resolve_cloud_id() raises JiraConnectionError if tenant_info returns non-200."""
+    with aioresponses() as m:
+        m.get(f"{BASE}/_edge/tenant_info", status=404)
+        async with aiohttp.ClientSession() as s:
+            c = _scoped_client(s, cloud_id=None)
+            with pytest.raises(JiraConnectionError):
+                await c.resolve_cloud_id()
+
+
+async def test_scoped_client_search_uses_gateway_url():
+    """After cloud_id is known, search() POSTs to the gateway URL, not the instance URL."""
+    page = {"startAt": 0, "maxResults": 50, "total": 1,
+            "issues": [{"key": "A-1", "fields": {}}]}
+    with aioresponses() as m:
+        m.post(f"{SCOPED_BASE}/rest/api/3/search", payload=page)
+        async with aiohttp.ClientSession() as s:
+            c = _scoped_client(s, cloud_id=CLOUD_ID)
+            issues = await c.search("jql", ["summary"])
+    assert len(issues) == 1
+
+
+async def test_classic_client_search_uses_instance_url():
+    """Classic client continues to use the instance URL unchanged."""
+    page = {"startAt": 0, "maxResults": 50, "total": 1,
+            "issues": [{"key": "B-1", "fields": {}}]}
+    with aioresponses() as m:
+        m.post(f"{BASE}/rest/api/3/search", payload=page)
+        async with aiohttp.ClientSession() as s:
+            c = _client(s)
+            issues = await c.search("jql", ["summary"])
+    assert len(issues) == 1
 
 
 async def test_get_custom_fields_deduplicates_names():

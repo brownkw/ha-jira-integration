@@ -5,7 +5,8 @@
         "data": {
           "url": "Jira URL (https://your-site.atlassian.net)",
           "email": "Account email",
-          "token": "API token"
+          "token": "API token",
+          "token_type": "API token type"
         }
       }
     },

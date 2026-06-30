@@ -6,6 +6,8 @@ from typing import Any
 
 import aiohttp
 
+from .const import SCOPED_API_BASE, TENANT_INFO_PATH, TOKEN_TYPE_SCOPED
+
 
 class JiraError(Exception):
     """Base error."""
@@ -28,11 +30,52 @@ class JiraRateLimitError(JiraError):
 
 
 class JiraClient:
-    def __init__(self, url: str, email: str, token: str, session: aiohttp.ClientSession):
-        self._url = url.rstrip("/")
+    def __init__(
+        self,
+        url: str,
+        email: str,
+        token: str,
+        session: aiohttp.ClientSession,
+        token_type: str = "classic",
+        cloud_id: str | None = None,
+    ):
+        self._instance_url = url.rstrip("/")
         self._email = email
         self._token = token
         self._session = session
+        self._token_type = token_type
+        # For scoped tokens: use gateway base URL if cloud_id already known;
+        # otherwise resolve_cloud_id() must be called before any API calls.
+        if token_type == TOKEN_TYPE_SCOPED and cloud_id:
+            self._base_url = f"{SCOPED_API_BASE}/{cloud_id}"
+        else:
+            self._base_url = self._instance_url
+
+    async def resolve_cloud_id(self) -> str:
+        """Fetch cloudId from tenant_info and set the scoped gateway base URL.
+
+        Only needed for scoped tokens. Called once at setup; the returned
+        cloud_id is stored in the config entry so it does not need to be
+        re-fetched on every HA restart — pass it as the cloud_id constructor
+        arg instead.
+
+        The /_edge/tenant_info endpoint is unauthenticated; no auth header sent.
+        """
+        try:
+            async with self._session.get(
+                f"{self._instance_url}{TENANT_INFO_PATH}"
+            ) as resp:
+                if resp.status >= 400:
+                    raise JiraConnectionError(
+                        f"Could not fetch tenant info: HTTP {resp.status}"
+                    )
+                data = await resp.json()
+        except aiohttp.ClientError as err:
+            raise JiraConnectionError(str(err)) from err
+
+        cloud_id: str = data["cloudId"]
+        self._base_url = f"{SCOPED_API_BASE}/{cloud_id}"
+        return cloud_id
 
     def _auth_header(self) -> str:
         raw = f"{self._email}:{self._token}".encode()
@@ -58,7 +101,7 @@ class JiraClient:
         """Return priority names in server order."""
         try:
             async with self._session.get(
-                f"{self._url}/rest/api/3/priority", headers=self._headers()
+                f"{self._base_url}/rest/api/3/priority", headers=self._headers()
             ) as resp:
                 await self._raise_for_status(resp)
                 data = await resp.json()
@@ -74,7 +117,7 @@ class JiraClient:
         """
         try:
             async with self._session.get(
-                f"{self._url}/rest/api/3/field", headers=self._headers()
+                f"{self._base_url}/rest/api/3/field", headers=self._headers()
             ) as resp:
                 await self._raise_for_status(resp)
                 data = await resp.json()
@@ -111,7 +154,7 @@ class JiraClient:
             }
             try:
                 async with self._session.post(
-                    f"{self._url}/rest/api/3/search",
+                    f"{self._base_url}/rest/api/3/search",
                     headers=self._headers(),
                     json=body,
                 ) as resp:

@@ -10,6 +10,16 @@ STORAGE_VERSION = 1
 CONF_URL = "url"
 CONF_EMAIL = "email"
 CONF_TOKEN = "token"
+CONF_TOKEN_TYPE = "token_type"
+CONF_CLOUD_ID = "cloud_id"
+
+# Token types
+TOKEN_TYPE_CLASSIC = "classic"
+TOKEN_TYPE_SCOPED = "scoped"
+
+# Scoped token gateway — base URL is https://api.atlassian.com/ex/jira/{cloudId}
+SCOPED_API_BASE = "https://api.atlassian.com/ex/jira"
+TENANT_INFO_PATH = "/_edge/tenant_info"
 
 # JQL
 JQL_OPEN_ASSIGNED = (
