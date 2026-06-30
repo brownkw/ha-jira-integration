@@ -12,6 +12,9 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     SelectOptionDict,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
 from .api import JiraAuthError, JiraClient, JiraConnectionError, JiraError
@@ -26,7 +29,9 @@ from .const import (
 STEP_USER_SCHEMA = vol.Schema({
     vol.Required(CONF_URL): str,
     vol.Required(CONF_EMAIL): str,
-    vol.Required(CONF_TOKEN): str,
+    vol.Required(CONF_TOKEN): TextSelector(
+        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+    ),
     vol.Required(CONF_TOKEN_TYPE, default=TOKEN_TYPE_CLASSIC): SelectSelector(
         SelectSelectorConfig(
             options=[
