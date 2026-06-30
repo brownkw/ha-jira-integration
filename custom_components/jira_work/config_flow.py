@@ -7,6 +7,12 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    SelectOptionDict,
+)
 
 from .api import JiraAuthError, JiraClient, JiraConnectionError, JiraError
 from .const import (
@@ -21,8 +27,14 @@ STEP_USER_SCHEMA = vol.Schema({
     vol.Required(CONF_URL): str,
     vol.Required(CONF_EMAIL): str,
     vol.Required(CONF_TOKEN): str,
-    vol.Required(CONF_TOKEN_TYPE, default=TOKEN_TYPE_CLASSIC): vol.In(
-        [TOKEN_TYPE_CLASSIC, TOKEN_TYPE_SCOPED]
+    vol.Required(CONF_TOKEN_TYPE, default=TOKEN_TYPE_CLASSIC): SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value=TOKEN_TYPE_CLASSIC, label="Classic (unscoped)"),
+                SelectOptionDict(value=TOKEN_TYPE_SCOPED, label="Scoped token"),
+            ],
+            mode=SelectSelectorMode.LIST,
+        )
     ),
     # Optional — only required when token_type == scoped; validated manually below.
     vol.Optional(CONF_CLOUD_ID, default=""): str,
@@ -137,11 +149,29 @@ class JiraWorkOptionsFlow(OptionsFlow):
             vol.Optional(
                 OPT_CUSTOM_FIELDS,
                 default=current.get(OPT_CUSTOM_FIELDS, []),
-            ): vol.All([vol.In(custom_fields)]),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(value=k, label=v)
+                        for k, v in custom_fields.items()
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Optional(
                 OPT_HIGH_PRIORITY_NAMES,
                 default=current.get(OPT_HIGH_PRIORITY_NAMES, DEFAULT_HIGH_PRIORITY_NAMES),
-            ): vol.All([vol.In(priorities)]),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(value=p, label=p)
+                        for p in priorities
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Optional(
                 OPT_POLL_INTERVAL,
                 default=current.get(OPT_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
