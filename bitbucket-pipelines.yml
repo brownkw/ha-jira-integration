@@ -9,7 +9,7 @@ definitions:
         script:
           - git remote add github https://${GITHUB_TOKEN}@github.com/brownkw/ha-jira-integration.git
           - git fetch --unshallow 2>/dev/null || true
-          - git fetch origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          - git fetch origin '+refs/tags/*:refs/tags/*'
           - git push --mirror github
 
 pipelines:
