@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "url": "Jira URL (https://your-site.atlassian.net)",
+          "email": "Account email",
+          "token": "API token",
+          "token_type": "API token type",
+          "cloud_id": "Cloud ID (required for scoped tokens — find at admin.atlassian.com/s/<cloud-id>)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed. Check your email and API token.",
+      "cannot_connect": "Could not connect to Jira. Check the URL.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Jira account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "custom_fields": "Custom fields to track",
+          "high_priority_names": "High-priority levels (for the high-priority sensor)",
+          "rolling_window_hours": "Newly-assigned rolling window (hours)",
+          "poll_interval": "Poll interval (minutes)",
+          "due_within_days": "Due-soon window (days)"
+        }
+      }
+    }
+  }
+}
