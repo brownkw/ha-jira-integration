@@ -8,7 +8,10 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
 from .api import JiraClient
-from .const import CONF_EMAIL, CONF_TOKEN, CONF_URL, DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .const import (
+    CONF_CLOUD_ID, CONF_EMAIL, CONF_TOKEN, CONF_TOKEN_TYPE, CONF_URL,
+    DOMAIN, STORAGE_KEY, STORAGE_VERSION, TOKEN_TYPE_CLASSIC,
+)
 from .coordinator import JiraDataUpdateCoordinator
 
 PLATFORMS = [Platform.SENSOR]
@@ -17,7 +20,12 @@ PLATFORMS = [Platform.SENSOR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     client = JiraClient(
-        entry.data[CONF_URL], entry.data[CONF_EMAIL], entry.data[CONF_TOKEN], session
+        entry.data[CONF_URL],
+        entry.data[CONF_EMAIL],
+        entry.data[CONF_TOKEN],
+        session,
+        token_type=entry.data.get(CONF_TOKEN_TYPE, TOKEN_TYPE_CLASSIC),
+        cloud_id=entry.data.get(CONF_CLOUD_ID),
     )
     store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
     coordinator = JiraDataUpdateCoordinator(hass, client, entry, store)
