@@ -15,6 +15,9 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
 )
 
 from .api import JiraAuthError, JiraClient, JiraConnectionError, JiraError
@@ -142,6 +145,10 @@ class JiraWorkOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
+            # NumberSelector returns floats — coerce numeric fields back to int
+            for key in (OPT_POLL_INTERVAL, OPT_DUE_WITHIN_DAYS, OPT_ROLLING_WINDOW_HOURS):
+                if key in user_input:
+                    user_input[key] = int(user_input[key])
             return self.async_create_entry(title="", data=user_input)
 
         try:
@@ -180,14 +187,20 @@ class JiraWorkOptionsFlow(OptionsFlow):
             vol.Optional(
                 OPT_POLL_INTERVAL,
                 default=current.get(OPT_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
-            ): vol.All(int, vol.Range(min=1, max=1440)),
+            ): NumberSelector(
+                NumberSelectorConfig(min=1, max=1440, step=1, mode=NumberSelectorMode.BOX)
+            ),
             vol.Optional(
                 OPT_DUE_WITHIN_DAYS,
                 default=current.get(OPT_DUE_WITHIN_DAYS, DEFAULT_DUE_WITHIN_DAYS),
-            ): vol.All(int, vol.Range(min=0, max=365)),
+            ): NumberSelector(
+                NumberSelectorConfig(min=0, max=365, step=1, mode=NumberSelectorMode.BOX)
+            ),
             vol.Optional(
                 OPT_ROLLING_WINDOW_HOURS,
                 default=current.get(OPT_ROLLING_WINDOW_HOURS, ROLLING_WINDOW_HOURS),
-            ): vol.All(int, vol.Range(min=1, max=168)),
+            ): NumberSelector(
+                NumberSelectorConfig(min=1, max=168, step=1, mode=NumberSelectorMode.BOX)
+            ),
         })
         return self.async_show_form(step_id="init", data_schema=schema)
