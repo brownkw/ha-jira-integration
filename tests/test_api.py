@@ -101,28 +101,6 @@ async def test_scoped_client_without_cloud_id_falls_back_to_instance_url():
         assert c._base_url == BASE
 
 
-async def test_resolve_cloud_id_sets_base_url():
-    """resolve_cloud_id() fetches tenant_info and updates _base_url to the gateway URL."""
-    tenant_info = {"cloudId": CLOUD_ID, "displayName": "Test Site"}
-    with aioresponses() as m:
-        m.get(f"{BASE}/_edge/tenant_info", payload=tenant_info)
-        async with aiohttp.ClientSession() as s:
-            c = _scoped_client(s, cloud_id=None)
-            returned_id = await c.resolve_cloud_id()
-    assert returned_id == CLOUD_ID
-    assert c._base_url == SCOPED_BASE
-
-
-async def test_resolve_cloud_id_raises_on_http_error():
-    """resolve_cloud_id() raises JiraConnectionError if tenant_info returns non-200."""
-    with aioresponses() as m:
-        m.get(f"{BASE}/_edge/tenant_info", status=404)
-        async with aiohttp.ClientSession() as s:
-            c = _scoped_client(s, cloud_id=None)
-            with pytest.raises(JiraConnectionError):
-                await c.resolve_cloud_id()
-
-
 async def test_scoped_client_search_uses_gateway_url():
     """After cloud_id is known, search() POSTs to the gateway URL, not the instance URL."""
     page = {"startAt": 0, "maxResults": 50, "total": 1,

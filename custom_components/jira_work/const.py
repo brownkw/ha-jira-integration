@@ -19,7 +19,7 @@ TOKEN_TYPE_SCOPED = "scoped"
 
 # Scoped token gateway — base URL is https://api.atlassian.com/ex/jira/{cloudId}
 SCOPED_API_BASE = "https://api.atlassian.com/ex/jira"
-TENANT_INFO_PATH = "/_edge/tenant_info"
+CONF_CLOUD_ID = "cloud_id"
 
 # JQL
 JQL_OPEN_ASSIGNED = (

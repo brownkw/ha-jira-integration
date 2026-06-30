@@ -6,7 +6,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import SCOPED_API_BASE, TENANT_INFO_PATH, TOKEN_TYPE_SCOPED
+from .const import SCOPED_API_BASE, TOKEN_TYPE_SCOPED
 
 
 class JiraError(Exception):
@@ -50,32 +50,6 @@ class JiraClient:
             self._base_url = f"{SCOPED_API_BASE}/{cloud_id}"
         else:
             self._base_url = self._instance_url
-
-    async def resolve_cloud_id(self) -> str:
-        """Fetch cloudId from tenant_info and set the scoped gateway base URL.
-
-        Only needed for scoped tokens. Called once at setup; the returned
-        cloud_id is stored in the config entry so it does not need to be
-        re-fetched on every HA restart — pass it as the cloud_id constructor
-        arg instead.
-
-        The /_edge/tenant_info endpoint is unauthenticated; no auth header sent.
-        """
-        try:
-            async with self._session.get(
-                f"{self._instance_url}{TENANT_INFO_PATH}"
-            ) as resp:
-                if resp.status >= 400:
-                    raise JiraConnectionError(
-                        f"Could not fetch tenant info: HTTP {resp.status}"
-                    )
-                data = await resp.json()
-        except aiohttp.ClientError as err:
-            raise JiraConnectionError(str(err)) from err
-
-        cloud_id: str = data["cloudId"]
-        self._base_url = f"{SCOPED_API_BASE}/{cloud_id}"
-        return cloud_id
 
     def _auth_header(self) -> str:
         raw = f"{self._email}:{self._token}".encode()

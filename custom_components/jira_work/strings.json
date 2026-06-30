@@ -6,7 +6,8 @@
           "url": "Jira URL (https://your-site.atlassian.net)",
           "email": "Account email",
           "token": "API token",
-          "token_type": "API token type"
+          "token_type": "API token type",
+          "cloud_id": "Cloud ID (required for scoped tokens — find at admin.atlassian.com/s/<cloud-id>)"
         }
       }
     },
